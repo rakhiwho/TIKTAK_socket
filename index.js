@@ -3,6 +3,7 @@ import cors from "cors";
 import mongoose from "mongoose";
 import { createServer } from "http";
 import { Server } from "socket.io";
+import { authRouter } from "./routes/route.js";
 const app = express();
 const server = createServer(app);
 app.use(
@@ -23,8 +24,9 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
   },
 });
-const userSocketMap = {};
-const waitingQueue = [];
+export const userSocketMap = {};
+export const waitingQueue = [];
+export const inGame = [];
 
 export const getRecieverSocketID = (receiverID) => {
   return userSocketMap[receiverID];
@@ -40,16 +42,16 @@ io.on("connection", (socket) => {
     userSocketMap[userId] = socket.id;
   }
   io.emit("getOnlineUsers", Object.keys(userSocketMap));
+  io.emit("getInGameUsers", Object.keys(inGame));
 
   //  creates room  and sends notification to friend
-
   socket.on("join", (userId, friend) => {
     socket.join(userId);
-    socket.to(friend).emit("roomInvite", roomId); // Notify friend
+    socket.to(friend).emit("roomInvite", userId); 
     console.log(`user with id ${userId}  joined the room ${userId}`);
   });
-  /// friend joins room through notification
 
+  /// friend joins room through notification
   socket.on("joinRoom", ({ roomId }) => {
     socket.join(roomId);
     console.log(`${room.id} joined room: ${roomId}`);
@@ -68,6 +70,8 @@ io.on("connection", (socket) => {
 
       // Notify both users
       io.to(roomId).emit("matchFound", { roomId, users: [socket.id, opponentId] });
+      inGame.push(socket.id);
+      inGame.push(opponentId);
 
       console.log(`Match found: ${socket.id} vs ${opponentId} in ${roomId}`);
     } else {
@@ -91,7 +95,9 @@ io.on("connection", (socket) => {
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
 });
+ 
 
+app.use('/game' , authRouter );
 server.listen(3001, () => {
   console.log("server is listing on port 3001");
 });
