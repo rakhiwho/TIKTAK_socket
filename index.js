@@ -3,101 +3,166 @@ import cors from "cors";
 import mongoose from "mongoose";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { authRouter } from "./routes/route.js";
+import dotenv from "dotenv";
+import { checkDraw, checkWin, player } from "./api/easy.js";
+import { route } from "./routes/index.js";
+
+dotenv.config({ path: "./.env" });
+
 const app = express();
 const server = createServer(app);
+
+app.use(express.json());
 app.use(
   cors({
     origin: "http://localhost:3000",
-    methods: ["GET", "POST", "DELETE"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
   })
 );
 
+app.use(route);
+
+// MongoDB Connection
 mongoose
-  .connect(process.env.MONGO_DB_URL)
+  .connect(process.env.MONGO_URL)
   .then(() => console.log("Connected to MongoDB successfully"))
   .catch((err) => console.error("Error connecting to MongoDB:", err));
 
+// Socket.io Setup
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:3000",
     methods: ["GET", "POST"],
   },
 });
+
 export const userSocketMap = {};
 export const waitingQueue = [];
-export const inGame = [];
+export const inGame = [];  
 
-export const getRecieverSocketID = (receiverID) => {
-  return userSocketMap[receiverID];
-};
-export const getRoomID = (roomID) => {
-  return userSocketMap[receiverID];
-};
-io.on("connection", (socket) => {
-  const userId = new mongoose.Types.ObjectId(socket.handshake.query.user);
-  console.log("A user connected", userId);
+const GAME_BOARD = new Map();
+const GAME_LASTSEEN = new Map();
 
-  if (userId != undefined) {
-    userSocketMap[userId] = socket.id;
-  }
-  io.emit("getOnlineUsers", Object.keys(userSocketMap));
-  io.emit("getInGameUsers", Object.keys(inGame));
-
-  //  creates room  and sends notification to friend
-  socket.on("join", (userId, friend) => {
-    socket.join(userId);
-    socket.to(friend).emit("roomInvite", userId); 
-    console.log(`user with id ${userId}  joined the room ${userId}`);
-  });
-
-  /// friend joins room through notification
-  socket.on("joinRoom", ({ roomId }) => {
-    socket.join(roomId);
-    console.log(`${room.id} joined room: ${roomId}`);
-  });
  
-  // When a user requests matchmaking
-  socket.on("findMatch", () => {
-    if (waitingQueue.length > 0) {
-      // Match with the first user in the queue
-      const opponentId = waitingQueue.shift(); // Remove the first user
-      const roomId = `room_${socket.id}_${opponentId}`; // Unique room ID
+setInterval(()=>{
+  for (const [key, value] of GAME_LASTSEEN) {
+    const time_now =  Date.now();
 
-      // Join both users to the same room
-      socket.join(roomId);
-      io.to(opponentId).socketsJoin(roomId);
+  if(time_now - value  >  15000){
+    GAME_BOARD.delete(key)
+  }
+}
 
-      // Notify both users
-      io.to(roomId).emit("matchFound", { roomId, users: [socket.id, opponentId] });
-      inGame.push(socket.id);
-      inGame.push(opponentId);
+}, 15000)
 
-      console.log(`Match found: ${socket.id} vs ${opponentId} in ${roomId}`);
-    } else {
-      // Add the current user to the queue
-      waitingQueue.push(socket.id);
-      console.log(`User added to queue: ${socket.id}`);
+io.on("connection", (socket) => {
+  const user = socket.handshake.query.user;
+  console.log(`User connected: ${user} with socket ${socket.id}`);
+
+  // Add user to socket map
+  if (!userSocketMap[user]) {
+    userSocketMap[user] = [];
+  }
+  userSocketMap[user].push(socket.id);
+
+  // Broadcast all users
+  setTimeout(() => {
+    io.emit("get_all_users", userSocketMap);
+  }, 100);
+
+  // Join game room
+  socket.on("join", (userID) => {
+    console.log(`User ${userID} joined`);
+    socket.join(userSocketMap[user]);
+  });
+
+  // Messaging
+  socket.on("send", ({ userId, text }) => {
+    if (userSocketMap[userId]) {
+      userSocketMap[userId].forEach((socketId) => {
+        socket.to(socketId).emit("receive", text);
+      });  
     }
   });
 
-  //leave room
-  socket.on("leave", (roomId) => {
-    socket.leave(roomId);
-    console.log(`User with ID ${socket.id} left the room ${roomId}`);
+  // Invite system
+  socket.on("sendInvite", ({ id, userName }) => {
+    if (userSocketMap[id]) {
+      userSocketMap[id].forEach((socketId) => {
+        socket.to(socketId).emit("inviteSent", { user, userName });
+      });
+    }
   });
-  //dicconect
 
+  socket.on("acceptInvite", ({ p, userid, user1 }) => {
+    if (userSocketMap[userid]) {
+      userSocketMap[userid].forEach((socketId) => {
+        socket.to(socketId).emit("inviteAccepted", { p, user: user1 });
+      });
+    }
+  });
+   socket.on("refreshed", ({ gameId , user}) => {
+    const gameFromBackend = GAME_BOARD.get(gameId) ;
+     if (userSocketMap[user]) {
+       userSocketMap[user].forEach((socketId) => {
+        socket.to(socketId).emit("sendGame", { gameFromBackend } );
+      });
+    }
+  });
+  socket.on("sendGameID", ({ id , user }) => {
+    if (userSocketMap[user]) {
+      userSocketMap[user].forEach((socketId) => {
+        socket.to(socketId).emit("gameId", { id });
+      });
+    }
+  });
+
+  
+
+  // Game update
+  socket.on("updateGame", ({ id , newBoard, userid, row, col, p, quite }) => {
+    GAME_BOARD.set(id , newBoard);
+    GAME_LASTSEEN.set(id , Date.now());
+
+    if (quite) {
+      socket.leave(userSocketMap[userid]);
+      socket.to(userSocketMap[userid]).emit("quite", quite);
+    } else {
+      const winner = checkWin(row, col, newBoard, p);
+      const draw = checkDraw(newBoard, winner);
+      if (userSocketMap[userid]) {
+        userSocketMap[userid].forEach((socketId) => {
+          socket.to(socketId).emit("updateGameIn", {
+            p,
+            newBoard,
+            winner,
+            draw,
+          });
+        });
+      }
+    }
+  });
+
+  // Handle disconnect
   socket.on("disconnect", () => {
-    console.log("A user disconnected");
-    delete userSocketMap[userId];
+    console.log(`User disconnected: ${user}`);
 
-    io.emit("getOnlineUsers", Object.keys(userSocketMap));
+    if (userSocketMap[user]) {
+      userSocketMap[user] = userSocketMap[user].filter(
+        (id) => id !== socket.id
+      );
+      if (userSocketMap[user].length === 0) {
+        delete userSocketMap[user];
+      }
+    }
+
+    io.emit("get_all_users", userSocketMap);
   });
 });
- 
 
-app.use('/game' , authRouter );
-server.listen(3001, () => {
-  console.log("server is listing on port 3001");
+// Start server
+const PORT = process.env.PORT || 3005;
+server.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

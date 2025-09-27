@@ -1,87 +1,29 @@
-import { GAMEMODEL } from "../model/easyModel.js";
-import UserModel from "../model/user.js";
-import { inGame, waitingQueue } from "../index.js";
+import { inGameService } from "../service/index.js";
 
-export const getGame = async (req, res) => {
+export const getGameCon = async (req, res) => {
   try {
-    const { gameId } = req.body;
-
-    const game = await GAMEMODEL.findById({ gameId });
-
-    if (!game) {
-      return res.status(404).json("game not found ,something is wrong ");
-    }
-
+    const game = await inGameService.getGame(req.query.gameId);
     return res.status(200).json(game);
-
   } catch (error) {
-    return res.status(500).json("something went wrong!");
+    return res.status(500).json(error);
   }
 };
 
-export const startGame = async (req, res) => {
-  const { player1, player2, game, currentPlayer, winner, result } = req.body;
-
+export const startGameCon = async (req, res) => {
   try {
-    const p1 = await UserModel.findById({ player1 });
-    const p2 = await UserModel.findById({ player2 });
-
-    if (!p1 || !p2) {
-      return res.status(400).json(" one of the given player doesnt exist");
-    }
-
-    const current = {};
-    currentPlayer === player1 ? (current = p1) : (current = p2);
-    const newGame = new GAMEMODEL({
-      roomId: player1,
-      players: [p1, p2],
-      board: [game],
-      currentPlayer: current,
-       winner,
-       result,
-    });
-    await newGame.save();
-    waitingQueue = waitingQueue.filter(
-      (player) => player !== player1 && player !== player2
-    );
-    inGame.push(player1);
-    inGame.push(player2);
-    return res.status(200).json(newGame);
+    const game = await inGameService.startGame(req?.body);
+    return res.status(201).json(game);
   } catch (error) {
-    return res.status(500).json("somehting went wrong ", error);
+    return res.status(500).json(error);
   }
 };
 
-export const updateGame = async (req, res) => {
-  const { player1, player2, gameId, board, currentPlayer, winner, result } =
-    req.body;
-
+export const updateGameCon = async (req, res) => {
   try {
-    const p1 = await UserModel.findById({ player1 });
-    const p2 = await UserModel.findById({ player2 });
-    const game = await GAMEMODEL.findById({ gameId });
-
-    if (!p1 || !p2) {
-      returnres.status(400).json(" one of the given player diesnt exist");
-    }
-
-    if (!game) {
-      return res.status(400).json("either game doesnt exist or game ended");
-    }
-    const current = {};
-    currentPlayer === player1 ? (current = p1) : (current = p2);
-    game.board = board;
-    game.currentPlayer = current;
-    game.winner = winner;
-    game.result = result;
-
-    await game.save();
-    inGame = inGame.filter(
-      (player) => player !== player1 && player !== player2
-    );
-
+    console.log("kxchxhcjhjxh rakhi")
+    const game = await inGameService.updateGame(req?.body);
     return res.status(200).json(game);
   } catch (error) {
-    return res.status(500).json("somehting went wrong ", error);
+    return res.status(500).json(error);
   }
 };
