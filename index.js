@@ -102,14 +102,18 @@ io.on("connection", (socket) => {
       });
     }
   });
-   socket.on("refreshed", ({ gameId , user}) => {
-    const gameFromBackend = GAME_BOARD.get(gameId) ;
-     if (userSocketMap[user]) {
-       userSocketMap[user].forEach((socketId) => {
-        socket.to(socketId).emit("sendGame", { gameFromBackend } );
+socket.on("refreshing", ({ gameId, user1 }) => {
+      const gameFromBackend = GAME_BOARD.get(gameId)
+  if (userSocketMap[user1]) {
+    userSocketMap[user1].forEach((socketId) => {
+      io.to(socketId).emit("recieveID", {
+        gameFromBackend
       });
-    }
-  });
+    });
+  }
+});
+
+
   socket.on("sendGameID", ({ id , user }) => {
     if (userSocketMap[user]) {
       userSocketMap[user].forEach((socketId) => {

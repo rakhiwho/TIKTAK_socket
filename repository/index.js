@@ -5,7 +5,7 @@ export default class DefaultRepository {
 
   // Return all documents matching filter
   async find(filter) {
-    return await this.model.find({filter});
+    return await this.model.find({ filter });
   }
 
   // Find one document by ID
@@ -16,7 +16,7 @@ export default class DefaultRepository {
   // Update a document
   async update(data) {
     const game = await this.findById(data?._id);
-    if (!game) throw new Error('Document not found');
+    if (!game) throw new Error("Document not found");
 
     game.currentPlayer = data?.currentPlayer;
     game.board = data?.board;
