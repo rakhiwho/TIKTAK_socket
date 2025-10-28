@@ -20,7 +20,6 @@ export const startGameCon = async (req, res) => {
 
 export const updateGameCon = async (req, res) => {
   try {
-    console.log("kxchxhcjhjxh rakhi")
     const game = await inGameService.updateGame(req?.body);
     return res.status(200).json(game);
   } catch (error) {

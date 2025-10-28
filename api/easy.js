@@ -5,14 +5,15 @@ export const player = (p) => {
   return "o";
 };
 
-export const checkDraw = (board, WINNER) => {
+export const checkDraw = (board) => {
   // Check if all cells are filled
-  const isBoardFull = board.every((cell) =>
-    cell.every((c) => c === "x" || c === "o")
-  );
-
+for(let i =0 ; i < board.length ; i++){
+  for(let  j=0 ; j < board.length ; j++){
+  if(board[i][j]=="")return false;
+  }
+}
   // If the board is full and there's no winner, it's a draw
-  return isBoardFull && !WINNER;
+  return true;
 };
 export const updateBoard = (board, row, col, p) => {
   let newboard = [...board];
@@ -22,10 +23,10 @@ export const updateBoard = (board, row, col, p) => {
  
 export const checkWin = (row, col, board, p) => {
   let flag = true;
-
+     const p1 =  board[row][col];
   // Check Row
   for (let i = 0; i < 3; i++) {
-    if (board[row][i] !== p) {
+    if (board[row][i] !== p1) {
       flag = false;
       break;
     }
@@ -35,7 +36,7 @@ export const checkWin = (row, col, board, p) => {
   // Check Column
   flag = true;
   for (let i = 0; i < 3; i++) {
-    if (board[i][col] !== p) {
+    if (board[i][col] !== p1) {
       flag = false;
       break;
     }
@@ -46,7 +47,7 @@ export const checkWin = (row, col, board, p) => {
   if (row === col) {
     flag = true;
     for (let i = 0; i < board.length; i++) {
-      if (board[i][i] !== p) {
+      if (board[i][i] !== p1) {
         flag = false;
         break;
       }

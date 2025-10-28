@@ -42,6 +42,7 @@ export const waitingQueue = [];
 export const inGame = [];  
 
 const GAME_BOARD = new Map();
+const SCORE = new Map();
 const GAME_LASTSEEN = new Map();
 
  
@@ -97,6 +98,7 @@ io.on("connection", (socket) => {
 
   socket.on("acceptInvite", ({ p, userid, user1 }) => {
     if (userSocketMap[userid]) {
+      
       userSocketMap[userid].forEach((socketId) => {
         socket.to(socketId).emit("inviteAccepted", { p, user: user1 });
       });
@@ -113,6 +115,22 @@ socket.on("refreshing", ({ gameId, user1 }) => {
   }
 });
 
+socket.on("leave", ({ id  , gameId }) => {
+  const score =  SCORE.get(gameId);
+  SCORE.delete(gameId)
+  if (userSocketMap[id]) {
+    userSocketMap[id].forEach((socketId) => {
+      socket.to(socketId).emit("leaveRes", { id  , score });
+    });
+  }
+});
+socket.on("restart", ({ id , user , gameId }) => {
+  if (userSocketMap[user]) {
+    userSocketMap[user].forEach((socketId) => {
+      socket.to(socketId).emit("restartGame", { id  });
+    });
+  }
+});
 
   socket.on("sendGameID", ({ id , user }) => {
     if (userSocketMap[user]) {
@@ -125,7 +143,7 @@ socket.on("refreshing", ({ gameId, user1 }) => {
   
 
   // Game update
-  socket.on("updateGame", ({ id , newBoard, userid, row, col, p, quite }) => {
+  socket.on("updateGame", ({   id , newBoard, userid, row, col, p, quite }) => {
     GAME_BOARD.set(id , newBoard);
     GAME_LASTSEEN.set(id , Date.now());
 
@@ -133,15 +151,45 @@ socket.on("refreshing", ({ gameId, user1 }) => {
       socket.leave(userSocketMap[userid]);
       socket.to(userSocketMap[userid]).emit("quite", quite);
     } else {
-      const winner = checkWin(row, col, newBoard, p);
-      const draw = checkDraw(newBoard, winner);
+      const winner = checkWin(row, col, newBoard, p) ? newBoard[row] [col] : "";
+      const draw = winner =="" &&  checkDraw(newBoard) ; 
+      let score  =  SCORE.get(id)
+      if(winner != ""){
+        
+        if(!score){
+          const arr = [];
+          arr[0] =winner == "O" ? 1 : 0 ;
+          arr[1] =winner == "X" ? 1 : 0;
+          SCORE.set(id , arr)
+          score =  SCORE.get(id)
+        }else{
+          SCORE.set(id , [ winner== "O" ? score[0]+1 : score[0]  , winner== "X" ?score[1]+1 :  score[1] ]  )
+        }
+        
+      }
+      
+      console.log(SCORE.get(id))
+       SCORE.set(id , score);
+      if (userSocketMap[user]) {
+        userSocketMap[user].forEach((socketId) => {
+          io.to(socketId).emit("res",  {
+            p,
+            newBoard,
+            winner,
+            draw,
+            score
+          });
+        });
+      }
       if (userSocketMap[userid]) {
+       
         userSocketMap[userid].forEach((socketId) => {
           socket.to(socketId).emit("updateGameIn", {
             p,
             newBoard,
             winner,
             draw,
+            score
           });
         });
       }
