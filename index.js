@@ -32,7 +32,7 @@ mongoose
 // Socket.io Setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "https://tiktak-nine.vercel.app/",
     methods: ["GET", "POST"],
   },
 });
