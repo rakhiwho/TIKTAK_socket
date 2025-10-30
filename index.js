@@ -39,23 +39,21 @@ const io = new Server(server, {
 
 export const userSocketMap = {};
 export const waitingQueue = [];
-export const inGame = [];  
+export const inGame = [];
 
 const GAME_BOARD = new Map();
 const SCORE = new Map();
 const GAME_LASTSEEN = new Map();
 
- 
-setInterval(()=>{
+setInterval(() => {
   for (const [key, value] of GAME_LASTSEEN) {
-    const time_now =  Date.now();
+    const time_now = Date.now();
 
-  if(time_now - value  >  15000){
-    GAME_BOARD.delete(key)
+    if (time_now - value > 15000) {
+      GAME_BOARD.delete(key);
+    }
   }
-}
-
-}, 15000)
+}, 15000);
 
 io.on("connection", (socket) => {
   const user = socket.handshake.query.user;
@@ -83,7 +81,7 @@ io.on("connection", (socket) => {
     if (userSocketMap[userId]) {
       userSocketMap[userId].forEach((socketId) => {
         socket.to(socketId).emit("receive", text);
-      });  
+      });
     }
   });
 
@@ -98,41 +96,54 @@ io.on("connection", (socket) => {
 
   socket.on("acceptInvite", ({ p, userid, user1 }) => {
     if (userSocketMap[userid]) {
-      
       userSocketMap[userid].forEach((socketId) => {
         socket.to(socketId).emit("inviteAccepted", { p, user: user1 });
       });
     }
   });
-socket.on("refreshing", ({ gameId, user1 }) => {
-      const gameFromBackend = GAME_BOARD.get(gameId)
-  if (userSocketMap[user1]) {
-    userSocketMap[user1].forEach((socketId) => {
-      io.to(socketId).emit("recieveID", {
-        gameFromBackend
+  socket.on("refreshing", ({ gameId, user1 }) => {
+    const gameFromBackend = GAME_BOARD.get(gameId);
+    const score = SCORE.get(gameId)
+    if (userSocketMap[user1]) {
+      userSocketMap[user1].forEach((socketId) => {
+        io.to(socketId).emit("recieveID", {
+          gameFromBackend,
+        });
       });
-    });
-  }
-});
+    }
+  });
 
-socket.on("leave", ({ id  , gameId }) => {
-  const score =  SCORE.get(gameId);
-  SCORE.delete(gameId)
-  if (userSocketMap[id]) {
-    userSocketMap[id].forEach((socketId) => {
-      socket.to(socketId).emit("leaveRes", { id  , score });
-    });
-  }
-});
-socket.on("restart", ({ id , user , gameId }) => {
-  if (userSocketMap[user]) {
-    userSocketMap[user].forEach((socketId) => {
-      socket.to(socketId).emit("restartGame", { id  });
-    });
-  }
-});
+  socket.on("leave", ({ id, gameId }) => {
+    const score = SCORE.get(gameId);
+    SCORE.delete(gameId)
+    GAME_LASTSEEN.delete(gameId)
+    GAME_BOARD.delete(gameId)
+    if (userSocketMap[id]) {
+      userSocketMap[id].forEach((socketId) => {
+        socket.to(socketId).emit("leaveRes", { id, score });
+      });
+    }
+    if (userSocketMap[user]) {
+      userSocketMap[user].forEach((socketId) => {
+        io.to(socketId).emit("leaveRes", { user, score });
+      });
+    }
+  });
+  socket.on("restart", ({  userId, gameId }) => {
+    GAME_BOARD.delete(gameId)
+    if (userSocketMap[userId]) {
+      userSocketMap[userId].forEach((socketId) => {
+        socket.to(socketId).emit("restartGame", { user });
+      });
+    }
+    if (userSocketMap[user]) {
+      userSocketMap[user].forEach((socketId) => {
+        io.to(socketId).emit("restartGame", { userId });
+      });
+    }
+  });
 
-  socket.on("sendGameID", ({ id , user }) => {
+  socket.on("sendGameID", ({ id, user }) => {
     if (userSocketMap[user]) {
       userSocketMap[user].forEach((socketId) => {
         socket.to(socketId).emit("gameId", { id });
@@ -140,56 +151,53 @@ socket.on("restart", ({ id , user , gameId }) => {
     }
   });
 
-  
-
   // Game update
-  socket.on("updateGame", ({   id , newBoard, userid, row, col, p, quite }) => {
-    GAME_BOARD.set(id , newBoard);
-    GAME_LASTSEEN.set(id , Date.now());
+  socket.on("updateGame", ({ id, newBoard, userid, row, col, p, quite }) => {
+    GAME_BOARD.set(id, newBoard);
+    GAME_LASTSEEN.set(id, Date.now());
 
     if (quite) {
       socket.leave(userSocketMap[userid]);
       socket.to(userSocketMap[userid]).emit("quite", quite);
     } else {
-      const winner = checkWin(row, col, newBoard, p) ? newBoard[row] [col] : "";
-      const draw = winner =="" &&  checkDraw(newBoard) ; 
-      let score  =  SCORE.get(id)
-      if(winner != ""){
-        
-        if(!score){
+      const winner = checkWin(row, col, newBoard, p) ? newBoard[row][col] : "";
+      const draw = winner == "" && checkDraw(newBoard);
+      let score = SCORE.get(id);
+      if (winner != "") {
+        if (!score) {
           const arr = [];
-          arr[0] =winner == "O" ? 1 : 0 ;
-          arr[1] =winner == "X" ? 1 : 0;
-          SCORE.set(id , arr)
-          score =  SCORE.get(id)
-        }else{
-          SCORE.set(id , [ winner== "O" ? score[0]+1 : score[0]  , winner== "X" ?score[1]+1 :  score[1] ]  )
+          arr[0] = winner == "O" ? 1 : 0;
+          arr[1] = winner == "X" ? 1 : 0;
+          SCORE.set(id, arr);
+        } else {
+          SCORE.set(id, [
+            winner == "O" ? score[0] + 1 : score[0],
+            winner == "X" ? score[1] + 1 : score[1],
+          ]);
         }
-        
+        score = SCORE.get(id);
       }
-      
-      console.log(SCORE.get(id))
-       SCORE.set(id , score);
+
+      SCORE.set(id, score);
       if (userSocketMap[user]) {
         userSocketMap[user].forEach((socketId) => {
-          io.to(socketId).emit("res",  {
+          io.to(socketId).emit("res", {
             p,
             newBoard,
             winner,
             draw,
-            score
+            score,
           });
         });
       }
       if (userSocketMap[userid]) {
-       
         userSocketMap[userid].forEach((socketId) => {
           socket.to(socketId).emit("updateGameIn", {
             p,
             newBoard,
             winner,
             draw,
-            score
+            score,
           });
         });
       }
