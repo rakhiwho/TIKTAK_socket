@@ -15,7 +15,7 @@ const server = createServer(app);
 app.use(express.json());
 app.use(
   cors({
-    origin: "https://tiktak-nine.vercel.app/",
+    origin: "https://tiktak-w01l.onrender.com",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     credentials: true,
   })
@@ -32,7 +32,7 @@ mongoose
 // Socket.io Setup
 const io = new Server(server, {
   cors: {
-    origin: "https://tiktak-nine.vercel.app/",
+    origin: "https://tiktak-w01l.onrender.com",
     methods: ["GET", "POST"],
   },
 });
